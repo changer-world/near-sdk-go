@@ -1,4 +1,4 @@
-1. Learn about Rust Collections - https://docs.rs/near-sdk/latest/near_sdk/collections/index.html
+1. Learn about Rust Collections - https://docs.rs/near-sdk/latest/near_sdk/collections/index.html , https://github.com/near/near-sdk-rs/tree/master/near-sdk/src/collections
 2.Create 
 
 {
