@@ -2,34 +2,26 @@ package collections
 
 import (
 	"errors"
-	"log"
 
+	"github.com/vlmoon99/near-sdk-go/borsh"
 	"github.com/vlmoon99/near-sdk-go/env"
 )
 
-// EncoderFunc defines a function to serialize a value of type T into bytes.
-type EncoderFunc[T any] func(T) []byte
-
-// DecoderFunc defines a function to deserialize bytes into a value of type T.
-type DecoderFunc[T any] func([]byte) (T, error)
-
 // LazyOption is a persistent optional value stored in contract storage.
 type LazyOption[T any] struct {
-	key    []byte
-	encode EncoderFunc[T]
-	decode DecoderFunc[T]
+	key []byte
 }
 
-// New creates a new LazyOption with a given key and serialization functions.
-func New[T any](key []byte, encode EncoderFunc[T], decode DecoderFunc[T]) *LazyOption[T] {
-	return &LazyOption[T]{key: key, encode: encode, decode: decode}
+// NewLazyOption creates a new LazyOption with a given key.
+func NewLazyOption[T any](key []byte) *LazyOption[T] {
+	return &LazyOption[T]{key: key}
 }
 
 // IsSome checks if the value exists in storage.
 func (l *LazyOption[T]) IsSome() bool {
 	exists, err := env.StorageHasKey(l.key)
 	if err != nil {
-		log.Println("IsSome: error checking key existence:", err)
+		env.LogString("LazyOption.IsSome: error checking key existence: " + err.Error())
 		return false
 	}
 	return exists
@@ -44,7 +36,7 @@ func (l *LazyOption[T]) IsNone() bool {
 func (l *LazyOption[T]) Get() (*T, error) {
 	exists, err := env.StorageHasKey(l.key)
 	if err != nil {
-		log.Println("Get: error checking key existence:", err)
+		env.LogString("LazyOption.Get: error checking key existence: " + err.Error())
 		return nil, err
 	}
 	if !exists {
@@ -53,16 +45,17 @@ func (l *LazyOption[T]) Get() (*T, error) {
 
 	data, err := env.StorageRead(l.key)
 	if err != nil {
-		log.Println("Get: error reading from storage:", err)
+		env.LogString("LazyOption.Get: error reading from storage: " + err.Error())
 		return nil, err
 	}
 	if data == nil {
 		return nil, nil
 	}
 
-	val, err := l.decode(data)
+	var val T
+	err = borsh.Deserialize(data, &val)
 	if err != nil {
-		log.Println("Get: error decoding data:", err)
+		env.LogString("LazyOption.Get: error deserializing data: " + err.Error())
 		return nil, err
 	}
 	return &val, nil
@@ -72,14 +65,19 @@ func (l *LazyOption[T]) Get() (*T, error) {
 func (l *LazyOption[T]) Set(value T) bool {
 	existed, err := env.StorageHasKey(l.key)
 	if err != nil {
-		log.Println("Set: error checking key existence:", err)
+		env.LogString("LazyOption.Set: error checking key existence: " + err.Error())
 		existed = false
 	}
 
-	data := l.encode(value)
+	data, err := borsh.Serialize(value)
+	if err != nil {
+		env.LogString("LazyOption.Set: error serializing data: " + err.Error())
+		return existed
+	}
+
 	_, err = env.StorageWrite(l.key, data)
 	if err != nil {
-		log.Println("Set: error writing to storage:", err)
+		env.LogString("LazyOption.Set: error writing to storage: " + err.Error())
 	}
 	return existed
 }
@@ -88,7 +86,7 @@ func (l *LazyOption[T]) Set(value T) bool {
 func (l *LazyOption[T]) Replace(value T) (*T, error) {
 	old, err := l.Get()
 	if err != nil {
-		log.Println("Replace: error getting old value:", err)
+		env.LogString("LazyOption.Replace: error getting old value: " + err.Error())
 		return nil, err
 	}
 
@@ -100,7 +98,7 @@ func (l *LazyOption[T]) Replace(value T) (*T, error) {
 func (l *LazyOption[T]) Remove() bool {
 	existed, err := env.StorageHasKey(l.key)
 	if err != nil {
-		log.Println("Remove: error checking key existence:", err)
+		env.LogString("LazyOption.Remove: error checking key existence: " + err.Error())
 		return false
 	}
 	if !existed {
@@ -109,7 +107,7 @@ func (l *LazyOption[T]) Remove() bool {
 
 	removed, err := env.StorageRemove(l.key)
 	if err != nil {
-		log.Println("Remove: error removing from storage:", err)
+		env.LogString("LazyOption.Remove: error removing from storage: " + err.Error())
 		return false
 	}
 	return removed
@@ -119,21 +117,21 @@ func (l *LazyOption[T]) Remove() bool {
 func (l *LazyOption[T]) Take() (*T, error) {
 	val, err := l.Get()
 	if err != nil {
-		log.Println("Take: error getting value:", err)
+		env.LogString("LazyOption.Take: error getting value: " + err.Error())
 		return nil, err
 	}
 	l.Remove()
 	return val, nil
 }
 
-// MustGet returns the value or panics if it's missing or decoding fails.
+// MustGet returns the value or panics if it's missing or deserialization fails.
 func (l *LazyOption[T]) MustGet() T {
 	val, err := l.Get()
 	if err != nil {
 		panic(err)
 	}
 	if val == nil {
-		panic(errors.New("lazyoption: value not found"))
+		panic(errors.New("LazyOption.MustGet: value not found"))
 	}
 	return *val
 }

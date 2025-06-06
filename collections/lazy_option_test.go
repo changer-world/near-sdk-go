@@ -14,15 +14,9 @@ func init() {
 }
 
 func newLazyOption(key []byte) *collections.LazyOption[string] {
-	encode := func(s string) []byte {
-		return []byte(s)
-	}
-	decode := func(data []byte) (string, error) {
-		return string(data), nil
-	}
-	return collections.New[string](key, encode, decode)
-}
 
+	return collections.NewLazyOption[string](key)
+}
 func TestLazyOption_SetAndGet(t *testing.T) {
 	opt := newLazyOption([]byte("my-key"))
 	expected := "hello NEAR"
@@ -118,5 +112,17 @@ func TestLazyOption_Replace(t *testing.T) {
 	current := opt.MustGet()
 	if current != "new" {
 		t.Fatalf("Expected new value 'new', got %q", current)
+	}
+}
+
+func TestLazyOption_Get_None(t *testing.T) {
+	opt := newLazyOption([]byte("none-key"))
+
+	val, err := opt.Get()
+	if err != nil {
+		t.Fatalf("Unexpected error on Get(): %v", err)
+	}
+	if val != nil {
+		t.Fatalf("Expected nil for Get() on empty LazyOption, got: %v", val)
 	}
 }
